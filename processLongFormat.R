@@ -11,11 +11,11 @@ library(ggplot2)
 options(dplyr.summarise.inform = FALSE)
 
 ## change the default directories as needed
-baseDir = "."
-baseIPT = "."
-baseAnalysis = "."
+baseDir = "DATA"
+baseIPT = "IPT"
+baseAnalysis = "ANALYSIS"
 
-fileName = "DataSheet_longformat_TEST_v2.xlsx"
+fileName = "ARG_PtoMadryn_2021.xlsx"
 
 
 ## read sheets
@@ -23,12 +23,13 @@ fileName = "DataSheet_longformat_TEST_v2.xlsx"
 DF.sites = read_xlsx(file.path(baseDir, fileName),sheet = "SiteInfo")
 DF.sites = DF.sites[!is.na(DF.sites$COUNTRY),]
 
+#ATTENTION IN EXCEL FILE: COLUMNS MUST BE AS NUMBERS FORMAT
 DF.dates = DF.sites %>% group_by(LOCALITY, SITE) %>% 
   summarise(DATESTRING = unique(paste0(YEAR, sprintf("%02i",MONTH), sprintf("%02i",DAY))))
 
 
 ## convert time to UTC
-## get number of seconds from midnight
+## get number of seconds from midnight (remember to add time to the excel files)
 secsSTART = (1 -abs(as.numeric(julian(DF.sites$TIME_START)) - (as.integer(julian(DF.sites$TIME_START))))) * (60*60*24)
 secsEND = (1 - abs(as.numeric(julian(DF.sites$TIME_END)) - (as.integer(julian(DF.sites$TIME_END))))) * (60*60*24)
 dateChar = paste(DF.sites$YEAR, DF.sites$MONTH, DF.sites$DAY, sep="-")
@@ -42,11 +43,12 @@ DF.sites$TIME_END = DF.sites$eventDate + seconds(secsEND) + hours(dateOffset)
 DF.sites$eventTime = paste(format(DF.sites$TIME_START, "%H:%M:%SZ"), format(DF.sites$TIME_END, "%H:%M:%SZ"), sep="/")
 
 ## other fields
-DF.sites$datasetName = paste0("MBON-P2P-biodiversity-",unique(DF.sites$countryCode))
+DF.sites$countryCodeISO = countrycode(DF.sites$COUNTRY, "country.name","iso3c")
+DF.sites$datasetName = paste0("MBON-P2P-biodiversity-",unique(DF.sites$countryCodeISO))
 DF.sites$samplingProtocol = "MBON-P2P_bestpractices-rockyshores"
 DF.sites$samplingSizeValue = 0.25
 DF.sites$samplingSizeUnit = "square meter"
-DF.sites$countryCodeISO = countrycode(DF.sites$COUNTRY, "country.name","iso3c")
+#DF.sites$countryCodeISO = countrycode(DF.sites$COUNTRY, "country.name","iso3c")
 
 ## Data
 DF.data = read_xlsx(file.path(baseDir, fileName),sheet = "DATA")
@@ -83,9 +85,9 @@ DF.data = DF.data %>% group_by(LOCALITY, SITE, STRATA, SAMPLE) %>%
   mutate(sampleOrganismID = 1:n(), scientificName, AphiaID, Rank, Variable, Value)
 DF.data$occurrenceID = paste(DF.data$UNIT_ID, DF.data$SAMPLE, sprintf("%03d", DF.data$sampleOrganismID), sep="_")
 
-## convert abundance to count per square meter
+## convert abundance to count per square meter #original code was not workin I replace the list by the multiplier number, in our case 4
 densityMultiplier = list("FULL QUADRAT" = 4 , "EIGHT RANDOM" = 100/8*4)
-DF.data$Value[DF.data$Variable=="ABUNDANCE"] = DF.data$Value[DF.data$Variable=="ABUNDANCE"] * densityMultiplier[[DF.data$AREA_quadrat]]
+DF.data$Value[DF.data$Variable=="ABUNDANCE"] = DF.data$Value[DF.data$Variable=="ABUNDANCE"] * 4
 
 
 ## other fields for IPT
@@ -152,8 +154,10 @@ IPT.event = DF.sites %>%
          geodeticDatum = DATUM,
          strata=STRATA)
 
+#elimnate all subtrates categories and WITHOUT_SUBSTRATE
 DF.data.noSubstrate = DF.data %>% 
-  filter(! grepl("substrate", scientificName, fixed = T))
+  filter(! grepl("substrate", scientificName, fixed = T))%>% filter(! grepl("WITHOUT_SUBSTRATE", scientificName, fixed = T))
+
 
 IPT.occurrence = DF.data.noSubstrate %>% ungroup() %>% 
   select(eventID = UNIT_ID,
@@ -190,9 +194,9 @@ rootFileName = paste(unique(DF.sites$countryCodeISO), paste0(unique(DF.sites$loc
                      unique(DF.sites$HABITAT), gsub("-","", min(DF.sites$eventDate)), sep="_")
 
 ## IPT
-readr::write_csv(IPT.event, path = file.path(baseDir,baseIPT,paste0(rootFileName, "_IPT-event.csv")), na = "")
-readr::write_csv(IPT.occurrence, path = file.path(baseDir,baseIPT,paste0(rootFileName, "_IPT-occurrence.csv")), na = "")
-readr::write_csv(IPT.mof, path = file.path(baseDir,baseIPT,paste0(rootFileName, "_IPT-mof.csv")), na = "")
+readr::write_csv(IPT.event, path = file.path(baseIPT,paste0(rootFileName, "_IPT-event.csv")), na = "")
+readr::write_csv(IPT.occurrence, path = file.path(baseIPT,paste0(rootFileName, "_IPT-occurrence.csv")), na = "")
+readr::write_csv(IPT.mof, path = file.path(baseIPT,paste0(rootFileName, "_IPT-mof.csv")), na = "")
 
 ## Analysis
 readr::write_csv(DF.dataWide, path = file.path(baseDir,baseAnalysis,paste0(rootFileName, "_analysis.csv")))
