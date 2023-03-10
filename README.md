@@ -8,12 +8,12 @@ The code processLongFormat.R takes the excel xlsx data file and produce the foll
 
 ## For the IPT (substrate typoes are removed):
 
-*fileName_IPT-event.csv
-*fileName_IPT-occurrence.csv
-*fileName_IPT-mof.csv
+* fileName_IPT-event.csv
+* fileName_IPT-occurrence.csv
+* fileName_IPT-mof.csv
 
 
 ## For analysis (substrate types are included):
 
-*fileName_site.csv
-*fileName_analysis.csv
+* fileName_site.csv
+* fileName_analysis.csv
