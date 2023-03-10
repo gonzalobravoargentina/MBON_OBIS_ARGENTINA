@@ -156,7 +156,7 @@ IPT.event = DF.sites %>%
 
 #elimnate all subtrates categories and WITHOUT_SUBSTRATE
 DF.data.noSubstrate = DF.data %>% 
-  filter(! grepl("substrate", scientificName, fixed = T))%>% filter(! grepl("WITHOUT_SUBSTRATE", scientificName, fixed = T))
+  filter(! grepl("substrate", scientificName, fixed = T))%>% filter(! grepl("SUBSTRATE", scientificName, fixed = T))
 
 
 IPT.occurrence = DF.data.noSubstrate %>% ungroup() %>% 
