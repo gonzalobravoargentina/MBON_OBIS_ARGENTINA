@@ -6,14 +6,14 @@ Templates for P2P rocky and beach biodiversity data. Code for producing IPT and 
 
 The code processLongFormat.R takes the excel xlsx data file and produce the following files:
 
-For the IPT (substrate typoes are removed):
+## For the IPT (substrate typoes are removed):
 
-fileName_IPT-event.csv
-fileName_IPT-occurrence.csv
-fileName_IPT-mof.csv
+*fileName_IPT-event.csv
+*fileName_IPT-occurrence.csv
+*fileName_IPT-mof.csv
 
 
-For analysis (substrate types are included):
+## For analysis (substrate types are included):
 
-fileName_site.csv
-fileName_analysis.csv
+*fileName_site.csv
+*fileName_analysis.csv
