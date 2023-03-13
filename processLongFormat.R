@@ -15,7 +15,7 @@ baseDir = "DATA"
 baseIPT = "IPT"
 baseAnalysis = "ANALYSIS"
 
-fileName = "ARG_PtoMadryn_2021.xlsx"
+fileName = "ARG_PtoMadryn_2019.xlsx"
 
 
 ## read sheets
@@ -184,20 +184,30 @@ IPT.mofEnv =data.frame(eventID = DF.environ$eventID,
                        measurementUnitID = DF.environ$UnitID)
 IPT.mof = bind_rows(IPT.mof, IPT.mofEnv)
 
+
+#Taxonomic Coverage
+taxonomic_Coverage <- as.data.frame(unique(IPT.occurrence$scientificName))
+
+
+
 ## generate data anaylisis files
 ## reformat to wide
 DF.dataWide = dcast(occurrenceID+LOCALITY+SITE+STRATA+SAMPLE+scientificName+AphiaID+Rank~Variable, value.var = "Value", data=DF.data, sum)
+
+
 
 
 ## save files
 rootFileName = paste(unique(DF.sites$countryCodeISO), paste0(unique(DF.sites$localityCode, collapse="-")), 
                      unique(DF.sites$HABITAT), gsub("-","", min(DF.sites$eventDate)), sep="_")
 
+
 ## IPT
 readr::write_csv(IPT.event, path = file.path(baseIPT,paste0(rootFileName, "_IPT-event.csv")), na = "")
 readr::write_csv(IPT.occurrence, path = file.path(baseIPT,paste0(rootFileName, "_IPT-occurrence.csv")), na = "")
 readr::write_csv(IPT.mof, path = file.path(baseIPT,paste0(rootFileName, "_IPT-mof.csv")), na = "")
 
+readr::write_csv(taxonomic_Coverage, path = file.path(baseIPT,paste0(rootFileName, "_taxonomic_Coverage.csv")), na = "")
 ## Analysis
 readr::write_csv(DF.dataWide, path = file.path(baseDir,baseAnalysis,paste0(rootFileName, "_analysis.csv")))
 readr::write_csv(DF.sites, path = file.path(baseDir,baseAnalysis,paste0(rootFileName, "_site.csv")))
