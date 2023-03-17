@@ -15,7 +15,7 @@ baseDir = "DATA"
 baseIPT = "IPT"
 baseAnalysis = "ANALYSIS"
 
-fileName = "ARG_PtoMadryn_2019.xlsx"
+fileName = "ARG_PtoMadryn_2021.xlsx"
 
 
 ## read sheets
@@ -208,6 +208,7 @@ readr::write_csv(IPT.occurrence, path = file.path(baseIPT,paste0(rootFileName, "
 readr::write_csv(IPT.mof, path = file.path(baseIPT,paste0(rootFileName, "_IPT-mof.csv")), na = "")
 
 readr::write_csv(taxonomic_Coverage, path = file.path(baseIPT,paste0(rootFileName, "_taxonomic_Coverage.csv")), na = "")
+
 ## Analysis
 readr::write_csv(DF.dataWide, path = file.path(baseDir,baseAnalysis,paste0(rootFileName, "_analysis.csv")))
 readr::write_csv(DF.sites, path = file.path(baseDir,baseAnalysis,paste0(rootFileName, "_site.csv")))
