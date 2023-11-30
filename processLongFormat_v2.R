@@ -1,4 +1,3 @@
-## Process long format data table
 library(lutz)
 library(countrycode)
 library(readxl)
@@ -6,65 +5,73 @@ library(reshape2)
 library(lubridate)
 library(dplyr)
 library(ggplot2)
+library(kableExtra)
 options(dplyr.summarise.inform = FALSE)
 
+#source https://rpubs.com/eqmh/DwCA_Gen 
+
+
 ## change the default directories as needed
-baseDir = "DATA"
+baseDataDir = "DATA"
 baseIPT = "IPT"
 baseAnalysis = "ANALYSIS"
 
+#Load your data table
 fileName = "ARG_PtoMadryn_2021_v1.xlsx"
 
-
-## read sheets
-## Site INFO
-DF.sites = read_xlsx(file.path(baseDir, fileName),sheet = "SiteInfo")
+#Read file sheets
+## Extract information about your sampling site from the SiteInfo tab of your data table file
+DF.sites = read_xlsx(file.path(baseDataDir, fileName),sheet = "SiteInfo")
 DF.sites = DF.sites[!is.na(DF.sites$COUNTRY),]
 
-#ATTENTION IN EXCEL FILE: COLUMNS MUST BE AS NUMBERS FORMAT
-DF.dates = DF.sites %>% group_by(LOCALITY, SITE) %>% 
-  summarise(DATESTRING = unique(paste0(YEAR, sprintf("%02i",MONTH), sprintf("%02i",DAY))))
-
-
-## convert time to UTC
-## get number of seconds from midnight (remember to add time to the excel files)
+#convert time to UTC
+## get number of seconds from midnight
 secsSTART = (1 -abs(as.numeric(julian(DF.sites$TIME_START)) - (as.integer(julian(DF.sites$TIME_START))))) * (60*60*24)
 secsEND = (1 - abs(as.numeric(julian(DF.sites$TIME_END)) - (as.integer(julian(DF.sites$TIME_END))))) * (60*60*24)
 dateChar = paste(DF.sites$YEAR, DF.sites$MONTH, DF.sites$DAY, sep="-")
+
 ## get timezone and timezone offset
 timeZone = tz_lookup_coords(mean(DF.sites$LATITUDE, na.rm=T), mean(DF.sites$LONGITUDE, na.rm=T), method="accurate")
 dateOffset = tz_offset(dateChar, timeZone)$utc_offset_h
+
 ## create data and time UTC
 DF.sites$eventDate = as.POSIXct(dateChar, tz="UTC")
 DF.sites$TIME_START = DF.sites$eventDate + seconds(secsSTART) + hours(dateOffset)
 DF.sites$TIME_END = DF.sites$eventDate + seconds(secsEND) + hours(dateOffset)
 DF.sites$eventTime = paste(format(DF.sites$TIME_START, "%H:%M:%SZ"), format(DF.sites$TIME_END, "%H:%M:%SZ"), sep="/")
 
+print(timeZone)
 
-## other fields
+#Extract other fields
+# Country code
 DF.sites$countryCodeISO = countrycode(DF.sites$COUNTRY, "country.name","iso3c")
 DF.sites$datasetName = paste0("MBON-P2P-biodiversity-",unique(DF.sites$countryCodeISO))
-DF.sites$samplingProtocol = "MBON-P2P_bestpractices-rockyshores"
-DF.sites$samplingSizeValue = 0.25
-DF.sites$samplingSizeUnit = "square meter"
-#DF.sites$countryCodeISO = countrycode(DF.sites$COUNTRY, "country.name","iso3c")
 
-## Data
-DF.data = read_xlsx(file.path(baseDir, fileName),sheet = "DATA")
+# Sampling protocol
+DF.sites$samplingProtocol = "MBON-P2P_bestpractices-rockyshores"
+
+# Sampling size value
+DF.sites$samplingSizeValue = 0.25
+
+# Sampling unit
+DF.sites$samplingSizeUnit = "square meter"
+
+#Extrat data, taxa list and codes
+## data
+DF.data = read_xlsx(file.path(baseDataDir, fileName),sheet = "DATA")
 DF.data = DF.data[!is.na(DF.data$LOCALITY),]
 
-
 ## spp list
-DF.spp = read_xlsx(file.path(baseDir, fileName),sheet = "sppList")
+DF.spp = read_xlsx(file.path(baseDataDir, fileName),sheet = "sppList")
 
 ## codes
-DF.countryCodes = read_xlsx(file.path(baseDir, fileName),sheet = "Countries")
-DF.localityCodes = read_xlsx(file.path(baseDir, fileName),sheet = "Locality")
-DF.siteCodes = read_xlsx(file.path(baseDir, fileName),sheet = "Sites")
-DF.habitatCodes = read_xlsx(file.path(baseDir, fileName),sheet = "Habitat")
+DF.countryCodes = read_xlsx(file.path(baseDataDir, fileName),sheet = "Countries")
+DF.localityCodes = read_xlsx(file.path(baseDataDir, fileName),sheet = "Locality")
+DF.siteCodes = read_xlsx(file.path(baseDataDir, fileName),sheet = "Sites")
+DF.habitatCodes = read_xlsx(file.path(baseDataDir, fileName),sheet = "Habitat")
 
 
-## make IDs
+#Generate IDs
 ## add codes: SITES
 DF.sites = left_join(DF.sites, DF.countryCodes, by = "COUNTRY")
 DF.sites = left_join(DF.sites, DF.localityCodes, by = "LOCALITY")
@@ -75,21 +82,19 @@ DF.sites$PARENT_UNIT_ID = paste(DF.sites$countryCode, DF.sites$localityCode, DF.
                                 paste0(DF.sites$YEAR, DF.sites$MONTH, DF.sites$DAY), sep="_")
 DF.sites$UNIT_ID = paste(DF.sites$PARENT_UNIT_ID, DF.sites$STRATA, sep="_")
 
-
-## add codes: DATA 
-## add aphia and rank
+#Assign codes to DATA
+## Add Aphia ID and taxa rank
 DF.data = left_join(DF.data, DF.spp[,c("scientificName", "AphiaID", "Rank")])
 DF.data = left_join(DF.data, DF.sites[,c("UNIT_ID", "LOCALITY", "SITE", "STRATA")])
 DF.data = DF.data %>% group_by(LOCALITY, SITE, STRATA, SAMPLE) %>% 
   mutate(sampleOrganismID = 1:n(), scientificName, AphiaID, Rank, Variable, Value)
 DF.data$occurrenceID = paste(DF.data$UNIT_ID, DF.data$SAMPLE, sprintf("%03d", DF.data$sampleOrganismID), sep="_")
 
-## convert abundance to count per square meter #original code was not workin I replace the list by the multiplier number, in our case 4
-densityMultiplier = list("FULL QUADRAT" = 4 , "EIGHT RANDOM" = 100/8*4)
+#Convert abundance values
+## to count per square meter 
 DF.data$Value[DF.data$Variable=="ABUNDANCE"] = DF.data$Value[DF.data$Variable=="ABUNDANCE"] * 4
 
-
-## other fields for IPT
+#Assign other IPT fields
 DF.data$basisOfRecord = "HumanObservation"
 DF.data$occurrenceStatus = "present"
 DF.data$scientificNameID = paste0("lsid:marinespecies.org:taxname:", DF.data$AphiaID)
@@ -107,30 +112,9 @@ DF.data$measurementUnitID = ifelse(DF.data$Variable=="COVER",
 DF.data = DF.data %>% arrange(occurrenceID, scientificName)
 
 
-## Environmental data
-DF.environ = read_xlsx(file.path(baseDir, fileName),sheet = "UNITenvironment")
-DF.environ = DF.environ[!is.na(DF.environ$LOCALITY),]
-
-DF.enVariables = read_xlsx(file.path(baseDir, fileName),sheet = "EnvVariables")
-DF.enVariables = DF.enVariables[!is.na(DF.enVariables$Variable),]
-
-DF.environ = left_join(DF.environ, DF.enVariables, by = "Variable")
-
-## add codes: SITES
-DF.environ$COUNTRY = unique(DF.sites$countryCodeISO)
-DF.environ = left_join(DF.environ, DF.localityCodes, by = "LOCALITY")
-DF.environ = left_join(DF.environ, DF.siteCodes, by = "SITE")
-DF.environ = left_join(DF.environ, DF.dates, by=c("LOCALITY", "SITE"))
-
-## add eventID
-DF.environ$eventID = paste(DF.environ$COUNTRY, DF.environ$localityCode, DF.environ$siteCode, "RS", DF.environ$DATESTRING, DF.environ$STRATA, DF.environ$SAMPLE, sep = "_")
-DF.environ$eventID = gsub("_NA", "", DF.environ$eventID)
-
-
-## Cleanup
-
+#Remove substrate type records
+## EventCore file
 IPT.event = DF.sites %>% 
-  mutate(locality = gsub(" ","_",paste(LOCALITY, SITE, sep="-"))) %>% 
   select(datasetName,
          parentEventID=PARENT_UNIT_ID,
          eventID = UNIT_ID,
@@ -146,18 +130,19 @@ IPT.event = DF.sites %>%
          eventRemarks = REMARKS,
          country = COUNTRY,
          countryCode = countryCodeISO,
-         locality,
-         decimalLatitude = LATITUDE.y,
-         decimalLongitude = LONGITUDE.y,
+         locality = LOCALITY,
+         decimalLatitude = LATITUDE.x,
+         decimalLongitude = LONGITUDE.x,
          coordinateUncertaintyInMeters = GPS_ERROR,
          geodeticDatum = DATUM,
          strata=STRATA)
 
-#elimnate all subtrates categories and WITHOUT_SUBSTRATE
+#elimnate all subtrates categories and WITHOUT_SUBSTRATE (MUST USE ONLY ONE!!!)
 DF.data.noSubstrate = DF.data %>% 
   filter(! grepl("substrate", scientificName, fixed = T))%>% filter(! grepl("SUBSTRATE", scientificName, fixed = T))
 
 
+## OccurrenceCore file
 IPT.occurrence = DF.data.noSubstrate %>% ungroup() %>% 
   select(eventID = UNIT_ID,
          basisOfRecord,
@@ -166,7 +151,7 @@ IPT.occurrence = DF.data.noSubstrate %>% ungroup() %>%
          scientificName, 
          taxonRank = Rank) 
 
-
+## Event Measurement or Fact (eMOF) file
 IPT.mof = data.frame(eventID = DF.data.noSubstrate$UNIT_ID, 
                      occurrenceID = DF.data.noSubstrate$occurrenceID,
                      measurementType = tolower(DF.data.noSubstrate$Variable), 
@@ -174,43 +159,54 @@ IPT.mof = data.frame(eventID = DF.data.noSubstrate$UNIT_ID,
                      measurementValue = DF.data.noSubstrate$Value,
                      measurementUnit = DF.data.noSubstrate$measurementUnit,
                      measurementUnitID = DF.data.noSubstrate$measurementUnitID
-                     )
+)
+
+
+## Environmental data
+##ATTENTION IN EXCEL FILE: COLUMNS MUST BE AS NUMBERS FORMAT
+DF.dates = DF.sites %>% group_by(LOCALITY, SITE) %>% 
+  summarise(DATESTRING = unique(paste0(YEAR, sprintf("%02i",MONTH), sprintf("%02i",DAY))))
+
+DF.environ = read_xlsx(file.path(baseDataDir, fileName),sheet = "UNITenvironment")
+DF.environ = DF.environ[!is.na(DF.environ$LOCALITY),]
+
+DF.enVariables = read_xlsx(file.path(baseDataDir, fileName),sheet = "EnvVariables")
+DF.enVariables = DF.enVariables[!is.na(DF.enVariables$Variable),]
+
+DF.environ = left_join(DF.environ, DF.enVariables, by = "Variable")
+
+## add codes: SITES
+DF.environ$COUNTRY = unique(DF.sites$countryCodeISO)
+DF.environ = left_join(DF.environ, DF.localityCodes, by = "LOCALITY")
+DF.environ = left_join(DF.environ, DF.siteCodes, by = "SITE")
+DF.environ = left_join(DF.environ, DF.dates, by=c("LOCALITY", "SITE"))
+
+## add eventID
+DF.environ$eventID = paste(DF.environ$COUNTRY, DF.environ$localityCode, DF.environ$siteCode, "RS", DF.environ$DATESTRING, DF.environ$STRATA, DF.environ$SAMPLE, sep = "_")
+DF.environ$eventID = gsub("_NA", "", DF.environ$eventID)
 IPT.mofEnv =data.frame(eventID = DF.environ$eventID, 
                        measurementType = tolower(DF.environ$Variable), 
                        measurmentTypeID = DF.environ$VariableID,
                        measurementValue = DF.environ$Value,
                        measurementUnit = DF.environ$Units.y,
-                       measurementUnitID = DF.environ$UnitID)
-IPT.mof = bind_rows(IPT.mof, IPT.mofEnv)
+                       measurementUnitID = DF.environ$UnitID,
+                       Description = DF.environ$Description)
 
 
-#Taxonomic Coverage
-taxonomic_Coverage <- as.data.frame(unique(IPT.occurrence$scientificName))
-
-
-
-## generate data anaylisis files
+#Generate Data Anaylisis files
 ## reformat to wide
 DF.dataWide = dcast(occurrenceID+LOCALITY+SITE+STRATA+SAMPLE+scientificName+AphiaID+Rank~Variable, value.var = "Value", data=DF.data, sum)
 
 
-
-
-## save files
+#Save files
 rootFileName = paste(unique(DF.sites$countryCodeISO), paste0(unique(DF.sites$localityCode, collapse="-")), 
                      unique(DF.sites$HABITAT), gsub("-","", min(DF.sites$eventDate)), sep="_")
 
+## IPT files
+readr::write_csv(IPT.event, path = file.path(baseIPT,paste0(rootFileName, "_IPT-event.csv")))
+readr::write_csv(IPT.occurrence, path = file.path(baseIPT,paste0(rootFileName, "_IPT-occurrence.csv")))
+readr::write_csv(IPT.mof, path = file.path(baseIPT,paste0(rootFileName, "_IPT-mof.csv")))
 
-## IPT
-readr::write_csv(IPT.event, path = file.path(baseIPT,paste0(rootFileName, "_IPT-event.csv")), na = "")
-readr::write_csv(IPT.occurrence, path = file.path(baseIPT,paste0(rootFileName, "_IPT-occurrence.csv")), na = "")
-readr::write_csv(IPT.mof, path = file.path(baseIPT,paste0(rootFileName, "_IPT-mof.csv")), na = "")
-
-readr::write_csv(taxonomic_Coverage, path = file.path(baseIPT,paste0(rootFileName, "_taxonomic_Coverage.csv")), na = "")
-
-## Analysis
-readr::write_csv(DF.dataWide, path = file.path(baseDir,baseAnalysis,paste0(rootFileName, "_analysis.csv")))
-readr::write_csv(DF.sites, path = file.path(baseDir,baseAnalysis,paste0(rootFileName, "_site.csv")))
-
-
-
+## Analysis file
+readr::write_csv(DF.dataWide, path = file.path(baseAnalysis,paste0(rootFileName, "_analysis.csv")))
+readr::write_csv(DF.sites, path = file.path(baseAnalysis,paste0(rootFileName, "_site.csv")))
